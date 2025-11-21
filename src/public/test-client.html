@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Chat Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; margin-bottom: 10px; }
+        .message { margin: 5px 0; }
+        .system { color: #666; font-style: italic; }
+        .user { color: #007bff; }
+        .my-message { color: #28a745; text-align: right; }
+        button { margin: 5px; padding: 8px 16px; }
+        input { margin: 5px; padding: 8px; }
+    </style>
+</head>
+<body>
+<h1>WebSocket Chat Test Client</h1>
+
+<div id="messages"></div>
+
+<div>
+    <input type="text" id="messageInput" placeholder="Type your message..." style="width: 300px;">
+    <button id="sendButton">Send</button>
+</div>
+
+<div style="margin-top: 20px;">
+    <input type="text" id="roomInput" placeholder="Room name" style="width: 200px;">
+    <button id="createRoomButton">Create/Join Room</button>
+</div>
+
+<div style="margin-top: 10px;">
+    <button id="clearButton">Clear Messages</button>
+    <span id="status">Disconnected</span>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io('http://localhost:3000');
+    let currentRoom = null;
+
+    const sendButton = document.getElementById('sendButton');
+    const messageInput = document.getElementById('messageInput');
+    const createRoomButton = document.getElementById('createRoomButton');
+    const roomInput = document.getElementById('roomInput');
+    const clearButton = document.getElementById('clearButton');
+    const statusElement = document.getElementById('status');
+    const messagesDiv = document.getElementById('messages');
+
+    sendButton.addEventListener('click', sendMessage);
+    createRoomButton.addEventListener('click', createRoom);
+    clearButton.addEventListener('click', clearMessages);
+
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    roomInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            createRoom();
+        }
+    });
+
+    socket.on('connect', () => {
+        statusElement.textContent = `Connected (ID: ${socket.id})`;
+        statusElement.style.color = 'green';
+        addMessage('System: Connected to server', 'system');
+    });
+
+    socket.on('disconnect', () => {
+        statusElement.textContent = 'Disconnected';
+        statusElement.style.color = 'red';
+        addMessage('System: Disconnected from server', 'system');
+    });
+
+    socket.on('welcome', (data) => {
+        addMessage(`Server: ${data.message}`, 'system');
+    });
+
+    socket.on('user_joined', (data) => {
+        addMessage(`System: New user joined (ID: ${data.socketId})`, 'system');
+    });
+
+    socket.on('new_message', (data) => {
+        const isMyMessage = data.socketId === socket.id;
+        const prefix = isMyMessage ? 'You' : data.username;
+        addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user');
+    });
+
+    socket.on('room_created', (data) => {
+        addMessage(`System: Joined room "${data.room}"`, 'system');
+        currentRoom = data.room;
+    });
+
+    socket.on('user_left', (data) => {
+        addMessage(`System: User left (ID: ${data.socketId})`, 'system');
+    });
+
+    function sendMessage() {
+        const text = messageInput.value.trim();
+
+        if (text) {
+            socket.emit('send_message', {
+                text: text,
+                username: 'User-' + socket.id.substring(0, 4)
+            });
+            messageInput.value = '';
+        }
+    }
+
+    function createRoom() {
+        const roomName = roomInput.value.trim();
+
+        if (roomName) {
+            socket.emit('create_room', {
+                name: roomName
+            });
+            roomInput.value = '';
+        }
+    }
+
+    function addMessage(text, className) {
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${className}`;
+        messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function clearMessages() {
+        messagesDiv.innerHTML = '';
+    }
+</script>
+</body>
+</html>
