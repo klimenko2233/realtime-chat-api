@@ -5,6 +5,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
+const connectDB = require('./config/database');
+const authRoutes = require('./auth/routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,14 +17,17 @@ const io = socketIo(server, {
     }
 });
 
+connectDB();
+
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "http://localhost:3001"],
-            connectSrc: ["'self'", "ws://localhost:3001", "http://localhost:3001"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "http://localhost:3000"],
+            connectSrc: ["'self'", "ws://localhost:3001", "http://localhost:3000"],
             styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],        }
+            imgSrc: ["'self'", "data:", "https:"],
+        }
     },
     crossOriginEmbedderPolicy: false
 }))
@@ -30,8 +35,9 @@ app.use(helmet({
 app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
-
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.use('/api/auth', authRoutes);
 
 app.get('/test', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'test-client.html'));
