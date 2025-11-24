@@ -11,33 +11,56 @@
         .my-message { color: #28a745; text-align: right; }
         button { margin: 5px; padding: 8px 16px; }
         input { margin: 5px; padding: 8px; }
+        .auth-section { background: #f5f5f5; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .chat-section { display: none; }
     </style>
 </head>
 <body>
 <h1>WebSocket Chat Test Client</h1>
 
-<div id="messages"></div>
-
-<div>
-    <input type="text" id="messageInput" placeholder="Type your message..." style="width: 300px;">
-    <button id="sendButton">Send</button>
+<div class="auth-section" id="authSection">
+    <h3>Authentication</h3>
+    <div>
+        <input type="text" id="authUsername" placeholder="Username" style="width: 150px;">
+        <input type="email" id="authEmail" placeholder="Email" style="width: 200px;">
+        <input type="password" id="authPassword" placeholder="Password" style="width: 150px;">
+        <button id="registerButton">Register</button>
+        <button id="loginButton">Login</button>
+    </div>
+    <div id="authStatus" style="margin-top: 10px;"></div>
 </div>
 
-<div style="margin-top: 20px;">
-    <input type="text" id="roomInput" placeholder="Room name" style="width: 200px;">
-    <button id="createRoomButton">Create/Join Room</button>
-</div>
+<div class="chat-section" id="chatSection">
+    <div id="messages"></div>
 
-<div style="margin-top: 10px;">
-    <button id="clearButton">Clear Messages</button>
-    <span id="status">Disconnected</span>
+    <div>
+        <input type="text" id="messageInput" placeholder="Type your message..." style="width: 300px;">
+        <button id="sendButton">Send</button>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <input type="text" id="roomInput" placeholder="Room name" style="width: 200px;">
+        <button id="createRoomButton">Create/Join Room</button>
+    </div>
+
+    <div style="margin-top: 10px;">
+        <button id="clearButton">Clear Messages</button>
+        <span id="status">Disconnected</span>
+    </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-    const socket = io('http://localhost:3000');
-    let currentRoom = null;
+    let socket = null;
+    let currentToken = null;
+    let currentUser = null;
 
+    // Элементы DOM
+    const authSection = document.getElementById('authSection');
+    const chatSection = document.getElementById('chatSection');
+    const authStatus = document.getElementById('authStatus');
+    const registerButton = document.getElementById('registerButton');
+    const loginButton = document.getElementById('loginButton');
     const sendButton = document.getElementById('sendButton');
     const messageInput = document.getElementById('messageInput');
     const createRoomButton = document.getElementById('createRoomButton');
@@ -45,6 +68,157 @@
     const clearButton = document.getElementById('clearButton');
     const statusElement = document.getElementById('status');
     const messagesDiv = document.getElementById('messages');
+
+    // Функции аутентификации
+    async function register() {
+        const username = document.getElementById('authUsername').value;
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPassword').value;
+
+        if (!username || !email || !password) {
+            authStatus.textContent = 'Please fill all fields';
+            authStatus.style.color = 'red';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, email, password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                currentToken = data.token;
+                currentUser = data.user;
+                authStatus.textContent = 'Registration successful!';
+                authStatus.style.color = 'green';
+                initializeSocket();
+            } else {
+                authStatus.textContent = `Error: ${data.error}`;
+                authStatus.style.color = 'red';
+            }
+        } catch (error) {
+            authStatus.textContent = 'Network error';
+            authStatus.style.color = 'red';
+        }
+    }
+
+    async function login() {
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPassword').value;
+
+        if (!email || !password) {
+            authStatus.textContent = 'Please fill email and password';
+            authStatus.style.color = 'red';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                currentToken = data.token;
+                currentUser = data.user;
+                authStatus.textContent = 'Login successful!';
+                authStatus.style.color = 'green';
+                initializeSocket();
+            } else {
+                authStatus.textContent = `Error: ${data.error}`;
+                authStatus.style.color = 'red';
+            }
+        } catch (error) {
+            authStatus.textContent = 'Network error';
+            authStatus.style.color = 'red';
+        }
+    }
+
+    // Инициализация WebSocket с токеном
+    function initializeSocket() {
+        if (socket) {
+            socket.disconnect();
+        }
+
+        socket = io('http://localhost:3000', {
+            auth: {
+                token: currentToken
+            }
+        });
+
+        setupSocketEvents();
+
+        // Показываем чат, скрываем аутентификацию
+        authSection.style.display = 'none';
+        chatSection.style.display = 'block';
+    }
+
+    // Настройка обработчиков событий WebSocket
+    function setupSocketEvents() {
+        socket.on('connect', () => {
+            statusElement.textContent = `Connected as ${currentUser.username}`;
+            statusElement.style.color = 'green';
+            addMessage('System: Connected to server', 'system');
+        });
+
+        socket.on('disconnect', () => {
+            statusElement.textContent = 'Disconnected';
+            statusElement.style.color = 'red';
+            addMessage('System: Disconnected from server', 'system');
+        });
+
+        socket.on('welcome', (data) => {
+            addMessage(`Server: ${data.message}`, 'system');
+        });
+
+        socket.on('user_joined', (data) => {
+            addMessage(`System: ${data.message}`, 'system');
+        });
+
+        socket.on('new_message', (data) => {
+            const isMyMessage = data.userId === currentUser.id;
+            const prefix = isMyMessage ? 'You' : data.username;
+            addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user');
+        });
+
+        socket.on('receive_message', (data) => {
+            const isMyMessage = data.userId === currentUser.id;
+            const prefix = isMyMessage ? 'You' : data.username;
+            addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user');
+        });
+
+        socket.on('room_created', (data) => {
+            addMessage(`System: Joined room "${data.room}"`, 'system');
+        });
+
+        socket.on('user_joined_room', (data) => {
+            addMessage(`System: ${data.message}`, 'system');
+        });
+
+        socket.on('user_left', (data) => {
+            addMessage(`System: ${data.message}`, 'system');
+        });
+
+        socket.on('error', (data) => {
+            addMessage(`Error: ${data.message}`, 'system');
+            console.error('Socket error:', data);
+        });
+    }
+
+    // Обработчики кнопок
+    registerButton.addEventListener('click', register);
+    loginButton.addEventListener('click', login);
 
     sendButton.addEventListener('click', sendMessage);
     createRoomButton.addEventListener('click', createRoom);
@@ -62,58 +236,33 @@
         }
     });
 
-    socket.on('connect', () => {
-        statusElement.textContent = `Connected (ID: ${socket.id})`;
-        statusElement.style.color = 'green';
-        addMessage('System: Connected to server', 'system');
-    });
-
-    socket.on('disconnect', () => {
-        statusElement.textContent = 'Disconnected';
-        statusElement.style.color = 'red';
-        addMessage('System: Disconnected from server', 'system');
-    });
-
-    socket.on('welcome', (data) => {
-        addMessage(`Server: ${data.message}`, 'system');
-    });
-
-    socket.on('user_joined', (data) => {
-        addMessage(`System: New user joined (ID: ${data.socketId})`, 'system');
-    });
-
-    socket.on('new_message', (data) => {
-        const isMyMessage = data.socketId === socket.id;
-        const prefix = isMyMessage ? 'You' : data.username;
-        addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user');
-    });
-
-    socket.on('room_created', (data) => {
-        addMessage(`System: Joined room "${data.room}"`, 'system');
-        currentRoom = data.room;
-    });
-
-    socket.on('user_left', (data) => {
-        addMessage(`System: User left (ID: ${data.socketId})`, 'system');
-    });
-
+    // Функции чата
     function sendMessage() {
+        if (!socket || !socket.connected) {
+            alert('Not connected to server');
+            return;
+        }
+
         const text = messageInput.value.trim();
 
         if (text) {
             socket.emit('send_message', {
-                text: text,
-                username: 'User-' + socket.id.substring(0, 4)
+                text: text
             });
             messageInput.value = '';
         }
     }
 
     function createRoom() {
+        if (!socket || !socket.connected) {
+            alert('Not connected to server');
+            return;
+        }
+
         const roomName = roomInput.value.trim();
 
         if (roomName) {
-            socket.emit('create_room', {
+            socket.emit('join_room', {
                 name: roomName
             });
             roomInput.value = '';
