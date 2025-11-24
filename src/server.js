@@ -19,12 +19,13 @@ const io = socketIo(server, {
 
 connectDB();
 
+
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'", "http://localhost:3000"],
-            connectSrc: ["'self'", "ws://localhost:3001", "http://localhost:3000"],
+            connectSrc: ["'self'", "ws://localhost:3000", "http://localhost:3000"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
         }
@@ -36,6 +37,7 @@ app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
 
 app.use('/api/auth', authRoutes);
 
@@ -56,6 +58,7 @@ require('./socket')(io);
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
+
 
 const PORT = process.env.PORT || 3000;
 

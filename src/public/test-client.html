@@ -1,22 +1,86 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>WebSocket Chat Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>WebSocket Chat</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; margin-bottom: 10px; }
-        .message { margin: 5px 0; }
-        .system { color: #666; font-style: italic; }
-        .user { color: #007bff; }
-        .my-message { color: #28a745; text-align: right; }
-        button { margin: 5px; padding: 8px 16px; }
-        input { margin: 5px; padding: 8px; }
-        .auth-section { background: #f5f5f5; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
-        .chat-section { display: none; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            margin: 5px 0;
+        }
+
+        .system {
+            color: #666;
+            font-style: italic;
+        }
+
+        .user {
+            color: #007bff;
+        }
+
+        .my-message {
+            color: #28a745;
+            text-align: right;
+        }
+
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+        }
+
+        input {
+            margin: 5px;
+            padding: 8px;
+        }
+
+        .auth-section {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .chat-section {
+            display: none;
+        }
+
+        .room-item {
+            padding: 5px;
+            margin: 2px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            cursor: pointer;
+        }
+
+        .room-item.active {
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .user-item {
+            padding: 5px;
+            margin: 2px;
+            background: #f8f9fa;
+        }
     </style>
 </head>
 <body>
-<h1>WebSocket Chat Test Client</h1>
+<h1>Real-time Chat</h1>
 
 <div class="auth-section" id="authSection">
     <h3>Authentication</h3>
@@ -31,18 +95,53 @@
 </div>
 
 <div class="chat-section" id="chatSection">
+    <!-- Header with user info and logout -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div>
+            <strong>Welcome, <span id="currentUsername">User</span>!</strong>
+        </div>
+        <button id="logoutButton" style="background: #dc3545; color: white;">Logout</button>
+    </div>
+
+    <!-- Rooms and Online Users -->
+    <div style="display: flex; gap: 10px; margin: 10px 0;">
+        <div style="flex: 1;">
+            <h4>Rooms</h4>
+            <div id="roomsList" style="border: 1px solid #ccc; padding: 10px; max-height: 150px; overflow-y: auto;">
+                <!-- Rooms will be populated by JavaScript -->
+            </div>
+        </div>
+        <div style="flex: 1;">
+            <h4>Online Users</h4>
+            <div id="onlineUsersList"
+                 style="border: 1px solid #ccc; padding: 10px; max-height: 150px; overflow-y: auto;">
+                <!-- Online users will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Create New Room -->
+    <div style="margin: 10px 0;">
+        <input type="text" id="newRoomName" placeholder="New room name" style="width: 200px;">
+        <input type="text" id="newRoomDescription" placeholder="Room description (optional)" style="width: 300px;">
+        <button id="createNewRoomButton">Create New Room</button>
+    </div>
+
+    <!-- Current Room Info -->
+    <div style="margin: 10px 0; padding: 5px; background: #e9ecef; border-radius: 3px;">
+        <strong>Current Room:</strong> <span id="currentRoom">general</span>
+    </div>
+
+    <!-- Messages Area -->
     <div id="messages"></div>
 
+    <!-- Send Message -->
     <div>
         <input type="text" id="messageInput" placeholder="Type your message..." style="width: 300px;">
         <button id="sendButton">Send</button>
     </div>
 
-    <div style="margin-top: 20px;">
-        <input type="text" id="roomInput" placeholder="Room name" style="width: 200px;">
-        <button id="createRoomButton">Create/Join Room</button>
-    </div>
-
+    <!-- Clear Messages -->
     <div style="margin-top: 10px;">
         <button id="clearButton">Clear Messages</button>
         <span id="status">Disconnected</span>
@@ -51,11 +150,15 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+    // ========== GLOBAL VARIABLES ==========
     let socket = null;
     let currentToken = null;
     let currentUser = null;
+    let currentRoom = 'general';
+    let availableRooms = ['general', 'random', 'help']; // Default rooms
+    let onlineUsers = [];
 
-    // Элементы DOM
+    // ========== DOM ELEMENTS ==========
     const authSection = document.getElementById('authSection');
     const chatSection = document.getElementById('chatSection');
     const authStatus = document.getElementById('authStatus');
@@ -68,8 +171,83 @@
     const clearButton = document.getElementById('clearButton');
     const statusElement = document.getElementById('status');
     const messagesDiv = document.getElementById('messages');
+    const logoutButton = document.getElementById('logoutButton');
+    const currentUsernameElement = document.getElementById('currentUsername');
+    const currentRoomElement = document.getElementById('currentRoom');
+    const roomsListElement = document.getElementById('roomsList');
+    const onlineUsersListElement = document.getElementById('onlineUsersList');
+    const newRoomNameInput = document.getElementById('newRoomName');
+    const newRoomDescriptionInput = document.getElementById('newRoomDescription');
+    const createNewRoomButton = document.getElementById('createNewRoomButton');
 
-    // Функции аутентификации
+    // ========== AUTHENTICATION FUNCTIONS ==========
+
+    // Check for existing token on page load
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedToken = localStorage.getItem('chatToken');
+        const savedUser = localStorage.getItem('chatUser');
+
+        if (savedToken && savedUser) {
+            try {
+                currentToken = savedToken;
+                currentUser = JSON.parse(savedUser);
+
+                // Verify token validity by fetching profile
+                fetch('/api/auth/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        } else {
+                            throw new Error('Invalid token');
+                        }
+                    })
+                    .then(data => {
+                        authStatus.textContent = 'Auto-login successful!';
+                        authStatus.style.color = 'green';
+                        initializeSocket();
+                    })
+                    .catch(error => {
+                        // Token is invalid - clear localStorage
+                        localStorage.removeItem('chatToken');
+                        localStorage.removeItem('chatUser');
+                        authStatus.textContent = 'Session expired, please login again';
+                        authStatus.style.color = 'orange';
+                    });
+            } catch (error) {
+                console.error('Auto-login error:', error);
+            }
+        }
+    });
+
+    // Save authentication data to localStorage
+    function saveAuthData(token, user) {
+        localStorage.setItem('chatToken', token);
+        localStorage.setItem('chatUser', JSON.stringify(user));
+    }
+
+    // Clear authentication data
+    function clearAuthData() {
+        localStorage.removeItem('chatToken');
+        localStorage.removeItem('chatUser');
+        currentToken = null;
+        currentUser = null;
+    }
+
+    // Logout function
+    function logout() {
+        if (socket) {
+            socket.disconnect();
+        }
+        clearAuthData();
+        location.reload(); // Reload page to reset state
+    }
+
+    // Register function
     async function register() {
         const username = document.getElementById('authUsername').value;
         const email = document.getElementById('authEmail').value;
@@ -95,6 +273,7 @@
             if (response.ok) {
                 currentToken = data.token;
                 currentUser = data.user;
+                saveAuthData(currentToken, currentUser);
                 authStatus.textContent = 'Registration successful!';
                 authStatus.style.color = 'green';
                 initializeSocket();
@@ -108,6 +287,7 @@
         }
     }
 
+    // Login function
     async function login() {
         const email = document.getElementById('authEmail').value;
         const password = document.getElementById('authPassword').value;
@@ -132,6 +312,7 @@
             if (response.ok) {
                 currentToken = data.token;
                 currentUser = data.user;
+                saveAuthData(currentToken, currentUser);
                 authStatus.textContent = 'Login successful!';
                 authStatus.style.color = 'green';
                 initializeSocket();
@@ -145,7 +326,9 @@
         }
     }
 
-    // Инициализация WebSocket с токеном
+    // ========== SOCKET INITIALIZATION ==========
+
+    // Initialize WebSocket connection with token
     function initializeSocket() {
         if (socket) {
             socket.disconnect();
@@ -158,13 +341,16 @@
         });
 
         setupSocketEvents();
+        updateUserInterface();
 
-        // Показываем чат, скрываем аутентификацию
+        // Show chat, hide authentication
         authSection.style.display = 'none';
         chatSection.style.display = 'block';
     }
 
-    // Настройка обработчиков событий WebSocket
+    // ========== SOCKET EVENT HANDLERS ==========
+
+    // Setup all WebSocket event listeners
     function setupSocketEvents() {
         socket.on('connect', () => {
             statusElement.textContent = `Connected as ${currentUser.username}`;
@@ -180,10 +366,13 @@
 
         socket.on('welcome', (data) => {
             addMessage(`Server: ${data.message}`, 'system');
+            updateOnlineUsersDisplay(data.onlineUsers);
+            updateRoomsDisplay();
         });
 
         socket.on('user_joined', (data) => {
             addMessage(`System: ${data.message}`, 'system');
+            updateOnlineUsersDisplay(data.onlineUsers);
         });
 
         socket.on('new_message', (data) => {
@@ -200,14 +389,43 @@
 
         socket.on('room_created', (data) => {
             addMessage(`System: Joined room "${data.room}"`, 'system');
+            if (!availableRooms.includes(data.room)) {
+                availableRooms.push(data.room);
+                updateRoomsDisplay();
+            }
+            currentRoom = data.room;
+            currentRoomElement.textContent = data.room;
         });
 
         socket.on('user_joined_room', (data) => {
-            addMessage(`System: ${data.message}`, 'system');
+            if (data.room === currentRoom) {
+                addMessage(`System: ${data.message}`, 'system');
+            }
+        });
+
+        socket.on('user_left_room', (data) => {
+            if (data.room === currentRoom) {
+                addMessage(`System: ${data.message}`, 'system');
+            }
         });
 
         socket.on('user_left', (data) => {
             addMessage(`System: ${data.message}`, 'system');
+            updateOnlineUsersDisplay(data.onlineUsers);
+        });
+
+        socket.on('room_history', (data) => {
+            if (data.room === currentRoom) {
+                // Clear current messages
+                messagesDiv.innerHTML = '';
+
+                // Add message history
+                data.messages.forEach(message => {
+                    const isMyMessage = message.sender === currentUser.id;
+                    const prefix = isMyMessage ? 'You' : message.senderUsername;
+                    addMessage(`${prefix}: ${message.content}`, isMyMessage ? 'my-message' : 'user');
+                });
+            }
         });
 
         socket.on('error', (data) => {
@@ -216,27 +434,84 @@
         });
     }
 
-    // Обработчики кнопок
-    registerButton.addEventListener('click', register);
-    loginButton.addEventListener('click', login);
+    // ========== ROOM MANAGEMENT ==========
 
-    sendButton.addEventListener('click', sendMessage);
-    createRoomButton.addEventListener('click', createRoom);
-    clearButton.addEventListener('click', clearMessages);
+    // Update rooms display
+    function updateRoomsDisplay() {
+        roomsListElement.innerHTML = '';
 
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
+        availableRooms.forEach(room => {
+            const roomElement = document.createElement('div');
+            roomElement.className = 'room-item';
+            if (room === currentRoom) {
+                roomElement.classList.add('active');
+            }
+            roomElement.textContent = room;
+
+            roomElement.addEventListener('click', () => {
+                joinRoom(room);
+            });
+
+            roomsListElement.appendChild(roomElement);
+        });
+    }
+
+    // Join a room
+    function joinRoom(roomName) {
+        if (!socket || !socket.connected) {
+            alert('Not connected to server');
+            return;
         }
-    });
 
-    roomInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            createRoom();
+        // Leave previous room if different
+        if (currentRoom && currentRoom !== roomName) {
+            socket.emit('leave_room', { name: currentRoom });
         }
-    });
 
-    // Функции чата
+        // Join new room
+        socket.emit('join_room', { name: roomName });
+        currentRoom = roomName;
+        currentRoomElement.textContent = roomName;
+
+        // Clear messages when switching rooms
+        messagesDiv.innerHTML = '';
+
+        updateRoomsDisplay();
+    }
+
+    // Create new room
+    function createNewRoom() {
+        const roomName = newRoomNameInput.value.trim();
+        const roomDescription = newRoomDescriptionInput.value.trim();
+
+        if (roomName) {
+            joinRoom(roomName);
+            newRoomNameInput.value = '';
+            newRoomDescriptionInput.value = '';
+        }
+    }
+
+    // ========== ONLINE USERS MANAGEMENT ==========
+
+    // Update online users display
+    function updateOnlineUsersDisplay(users) {
+        onlineUsersListElement.innerHTML = '';
+
+        if (users && users.length > 0) {
+            users.forEach(user => {
+                const userElement = document.createElement('div');
+                userElement.className = 'user-item';
+                userElement.textContent = `${user.username} ${user.id === currentUser.id ? '(You)' : ''}`;
+                onlineUsersListElement.appendChild(userElement);
+            });
+        } else {
+            onlineUsersListElement.innerHTML = '<div class="user-item">No users online</div>';
+        }
+    }
+
+    // ========== CHAT FUNCTIONS ==========
+
+    // Send message
     function sendMessage() {
         if (!socket || !socket.connected) {
             alert('Not connected to server');
@@ -247,28 +522,14 @@
 
         if (text) {
             socket.emit('send_message', {
-                text: text
+                text: text,
+                room: currentRoom
             });
             messageInput.value = '';
         }
     }
 
-    function createRoom() {
-        if (!socket || !socket.connected) {
-            alert('Not connected to server');
-            return;
-        }
-
-        const roomName = roomInput.value.trim();
-
-        if (roomName) {
-            socket.emit('join_room', {
-                name: roomName
-            });
-            roomInput.value = '';
-        }
-    }
-
+    // Add message to chat
     function addMessage(text, className) {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${className}`;
@@ -277,9 +538,53 @@
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
+    // Clear messages
     function clearMessages() {
         messagesDiv.innerHTML = '';
     }
+
+    // ========== UI UPDATE FUNCTIONS ==========
+
+    // Update user interface
+    function updateUserInterface() {
+        if (currentUser) {
+            currentUsernameElement.textContent = currentUser.username;
+        }
+        updateRoomsDisplay();
+    }
+
+    // ========== EVENT LISTENERS ==========
+
+    // Authentication buttons
+    registerButton.addEventListener('click', register);
+    loginButton.addEventListener('click', login);
+    logoutButton.addEventListener('click', logout);
+
+    // Chat buttons
+    sendButton.addEventListener('click', sendMessage);
+    clearButton.addEventListener('click', clearMessages);
+    createNewRoomButton.addEventListener('click', createNewRoom);
+
+    // Enter key handlers
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    newRoomNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            createNewRoom();
+        }
+    });
+
+    newRoomDescriptionInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            createNewRoom();
+        }
+    });
 </script>
 </body>
 </html>
+
+

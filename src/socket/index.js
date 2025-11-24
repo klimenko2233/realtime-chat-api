@@ -60,11 +60,8 @@ module.exports = (io) => {
                     room: data.room || 'general'
                 };
 
-                if (data.room) {
-                    socket.to(data.room).emit('receive_message', messageData);
-                } else {
-                    socket.broadcast.emit('new_message', messageData);
-                }
+                const targetRoom = data.room || 'general';
+                socket.to(targetRoom).emit('new_message', messageData);
 
                 socket.emit('new_message', {
                     ...messageData,
