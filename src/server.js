@@ -7,18 +7,19 @@ const morgan = require('morgan');
 const path = require('path');
 const connectDB = require('./config/database');
 const authRoutes = require('./auth/routes');
+const roomRoutes = require('./rooms/routes');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
+        origin: process.env.CLIENT_URL || "*",
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 
 connectDB();
-
 
 app.use(helmet({
     contentSecurityPolicy: {
@@ -31,15 +32,15 @@ app.use(helmet({
         }
     },
     crossOriginEmbedderPolicy: false
-}))
+}));
 
 app.use(cors());
-app.use(morgan('combined'));
+app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-
 app.use('/api/auth', authRoutes);
+app.use('/api/rooms', roomRoutes);
 
 app.get('/test', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'test-client.html'));
@@ -49,24 +50,34 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'OK',
         timestamp: new Date().toISOString(),
-        service: 'Real-time Chat API'
+        service: 'Real-time Chat API',
+        version: '1.0.0'
     });
 });
 
-require('./socket')(io);
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
 
+app.use((error, req, res, next) => {
+    console.error('Unhandled error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+});
+
+require('./socket')(io);
 
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
     console.log(`Real-time Chat API is running on port ${PORT}`);
-    console.log('Websocket server ready to accept connections')
-    console.log(`Health check available at http://localhost:${PORT}/health`)
+    console.log('Websocket server ready to accept connections');
+    console.log(`Health check: http://localhost:${PORT}/health`);
     console.log(`Test client: http://localhost:${PORT}/test`);
+    console.log(`API Documentation available at http://localhost:${PORT}/api/docs`);
 });
 
 module.exports = { app, server, io };

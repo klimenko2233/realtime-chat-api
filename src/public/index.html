@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Chat</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app-container">
+    <div class="auth-section" id="authSection">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>💬 Real-time Chat</h1>
+                <p>Join the conversation</p>
+            </div>
+
+            <div class="auth-form">
+                <div class="input-group">
+                    <input type="text" id="authUsername" placeholder=" " autocomplete="username">
+                    <label for="authUsername">Username</label>
+                </div>
+
+                <div class="input-group">
+                    <input type="email" id="authEmail" placeholder=" " autocomplete="email">
+                    <label for="authEmail">Email</label>
+                </div>
+
+                <div class="input-group">
+                    <input type="password" id="authPassword" placeholder=" " autocomplete="current-password">
+                    <label for="authPassword">Password</label>
+                </div>
+
+                <div class="auth-buttons">
+                    <button id="registerButton" class="btn btn-primary">Create Account</button>
+                    <button id="loginButton" class="btn btn-secondary">Sign In</button>
+                </div>
+
+                <div id="authStatus" class="auth-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-section" id="chatSection">
+        <header class="chat-header">
+            <div class="header-left">
+                <h2>💬 Chat App</h2>
+                <div class="room-indicator">
+                    <span class="current-room-label">Current Room:</span>
+                    <span id="currentRoom" class="current-room-name">general</span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="user-info">
+                    <span class="user-avatar">👤</span>
+                    <span id="currentUsername" class="username">User</span>
+                </div>
+                <button id="logoutButton" class="btn btn-danger btn-sm">Logout</button>
+            </div>
+        </header>
+
+        <div class="chat-main">
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <h3>🟢 Online Users</h3>
+                        <span id="onlineUsersCount" class="badge">0</span>
+                    </div>
+                    <div id="onlineUsersList" class="users-list">
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <h3>🏠 Rooms</h3>
+                        <button id="refreshRoomsButton" class="btn-icon" title="Refresh rooms">
+                            🔄
+                        </button>
+                    </div>
+
+                    <div id="roomsList" class="rooms-list">
+                    </div>
+
+                    <div class="create-room">
+                        <div class="input-group compact">
+                            <input type="text" id="newRoomName" placeholder="New room name">
+                        </div>
+                        <div class="input-group compact">
+                            <input type="text" id="newRoomDescription" placeholder="Description (optional)">
+                        </div>
+                        <button id="createNewRoomButton" class="btn btn-primary btn-sm btn-full">
+                            ➕ Create Room
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="chat-area">
+                <div id="messages" class="messages-container">
+                </div>
+
+                <div class="message-input-container">
+                    <div class="input-group message-input">
+                        <input type="text" id="messageInput" placeholder="Type your message...">
+                        <button id="sendButton" class="btn btn-primary send-btn">Send</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="status" class="status-indicator">Disconnected</span>
+            </div>
+            <div class="status-right">
+                <button id="clearButton" class="btn btn-text btn-sm">Clear Messages</button>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,81 +1,43 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>WebSocket Chat</title>
+    <title>Real-time Chat</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-
-        #messages {
-            border: 1px solid #ccc;
-            padding: 10px;
-            height: 300px;
-            overflow-y: scroll;
-            margin-bottom: 10px;
-        }
-
-        .message {
-            margin: 5px 0;
-        }
-
-        .system {
-            color: #666;
-            font-style: italic;
-        }
-
-        .user {
-            color: #007bff;
-        }
-
-        .my-message {
-            color: #28a745;
-            text-align: right;
-        }
-
-        button {
-            margin: 5px;
-            padding: 8px 16px;
-        }
-
-        input {
-            margin: 5px;
-            padding: 8px;
-        }
-
-        .auth-section {
-            background: #f5f5f5;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-        }
-
-        .chat-section {
-            display: none;
-        }
-
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; margin-bottom: 10px; }
+        .message { margin: 5px 0; }
+        .system { color: #666; font-style: italic; }
+        .user { color: #007bff; }
+        .my-message { color: #28a745; text-align: right; }
+        button { margin: 5px; padding: 8px 16px; }
+        input { margin: 5px; padding: 8px; }
+        .auth-section { background: #f5f5f5; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .chat-section { display: none; }
         .room-item {
-            padding: 5px;
+            padding: 8px;
             margin: 2px;
             background: #f8f9fa;
             border: 1px solid #dee2e6;
             cursor: pointer;
+            border-radius: 4px;
         }
-
         .room-item.active {
             background: #d4edda;
             border-color: #c3e6cb;
         }
-
+        .room-item:hover {
+            background: #e9ecef;
+        }
         .user-item {
             padding: 5px;
             margin: 2px;
             background: #f8f9fa;
+            border-radius: 3px;
+        }
+        .room-info {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -106,15 +68,17 @@
     <!-- Rooms and Online Users -->
     <div style="display: flex; gap: 10px; margin: 10px 0;">
         <div style="flex: 1;">
-            <h4>Rooms</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <h4 style="margin: 0;">Rooms</h4>
+                <button id="refreshRoomsButton" style="padding: 2px 8px; font-size: 0.8em;">Refresh</button>
+            </div>
             <div id="roomsList" style="border: 1px solid #ccc; padding: 10px; max-height: 150px; overflow-y: auto;">
                 <!-- Rooms will be populated by JavaScript -->
             </div>
         </div>
         <div style="flex: 1;">
             <h4>Online Users</h4>
-            <div id="onlineUsersList"
-                 style="border: 1px solid #ccc; padding: 10px; max-height: 150px; overflow-y: auto;">
+            <div id="onlineUsersList" style="border: 1px solid #ccc; padding: 10px; max-height: 150px; overflow-y: auto;">
                 <!-- Online users will be populated by JavaScript -->
             </div>
         </div>
@@ -155,7 +119,7 @@
     let currentToken = null;
     let currentUser = null;
     let currentRoom = 'general';
-    let availableRooms = ['general', 'random', 'help']; // Default rooms
+    let availableRooms = [];
     let onlineUsers = [];
 
     // ========== DOM ELEMENTS ==========
@@ -166,8 +130,6 @@
     const loginButton = document.getElementById('loginButton');
     const sendButton = document.getElementById('sendButton');
     const messageInput = document.getElementById('messageInput');
-    const createRoomButton = document.getElementById('createRoomButton');
-    const roomInput = document.getElementById('roomInput');
     const clearButton = document.getElementById('clearButton');
     const statusElement = document.getElementById('status');
     const messagesDiv = document.getElementById('messages');
@@ -179,10 +141,9 @@
     const newRoomNameInput = document.getElementById('newRoomName');
     const newRoomDescriptionInput = document.getElementById('newRoomDescription');
     const createNewRoomButton = document.getElementById('createNewRoomButton');
+    const refreshRoomsButton = document.getElementById('refreshRoomsButton');
 
     // ========== AUTHENTICATION FUNCTIONS ==========
-
-    // Check for existing token on page load
     window.addEventListener('DOMContentLoaded', () => {
         const savedToken = localStorage.getItem('chatToken');
         const savedUser = localStorage.getItem('chatUser');
@@ -192,7 +153,6 @@
                 currentToken = savedToken;
                 currentUser = JSON.parse(savedUser);
 
-                // Verify token validity by fetching profile
                 fetch('/api/auth/profile', {
                     method: 'GET',
                     headers: {
@@ -212,7 +172,6 @@
                         initializeSocket();
                     })
                     .catch(error => {
-                        // Token is invalid - clear localStorage
                         localStorage.removeItem('chatToken');
                         localStorage.removeItem('chatUser');
                         authStatus.textContent = 'Session expired, please login again';
@@ -224,13 +183,11 @@
         }
     });
 
-    // Save authentication data to localStorage
     function saveAuthData(token, user) {
         localStorage.setItem('chatToken', token);
         localStorage.setItem('chatUser', JSON.stringify(user));
     }
 
-    // Clear authentication data
     function clearAuthData() {
         localStorage.removeItem('chatToken');
         localStorage.removeItem('chatUser');
@@ -238,16 +195,14 @@
         currentUser = null;
     }
 
-    // Logout function
     function logout() {
         if (socket) {
             socket.disconnect();
         }
         clearAuthData();
-        location.reload(); // Reload page to reset state
+        location.reload();
     }
 
-    // Register function
     async function register() {
         const username = document.getElementById('authUsername').value;
         const email = document.getElementById('authEmail').value;
@@ -287,7 +242,6 @@
         }
     }
 
-    // Login function
     async function login() {
         const email = document.getElementById('authEmail').value;
         const password = document.getElementById('authPassword').value;
@@ -326,9 +280,7 @@
         }
     }
 
-    // ========== SOCKET INITIALIZATION ==========
-
-    // Initialize WebSocket connection with token
+    // ========== SOCKET FUNCTIONS ==========
     function initializeSocket() {
         if (socket) {
             socket.disconnect();
@@ -337,149 +289,135 @@
         socket = io('http://localhost:3000', {
             auth: {
                 token: currentToken
-            }
+            },
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000
         });
 
         setupSocketEvents();
         updateUserInterface();
 
-        // Show chat, hide authentication
         authSection.style.display = 'none';
         chatSection.style.display = 'block';
     }
 
-    // ========== SOCKET EVENT HANDLERS ==========
-
-    // Setup all WebSocket event listeners
     function setupSocketEvents() {
         socket.on('connect', () => {
             statusElement.textContent = `Connected as ${currentUser.username}`;
             statusElement.style.color = 'green';
-            addMessage('System: Connected to server', 'system');
+            addMessage('System: Connected to server', 'system', new Date().toISOString());
         });
 
         socket.on('disconnect', () => {
             statusElement.textContent = 'Disconnected';
             statusElement.style.color = 'red';
-            addMessage('System: Disconnected from server', 'system');
+            addMessage('System: Disconnected from server', 'system', new Date().toISOString());
         });
 
         socket.on('welcome', (data) => {
-            addMessage(`Server: ${data.message}`, 'system');
+            addMessage(`Server: ${data.message}`, 'system', data.timestamp);
             updateOnlineUsersDisplay(data.onlineUsers);
-            updateRoomsDisplay();
         });
 
         socket.on('user_joined', (data) => {
-            addMessage(`System: ${data.message}`, 'system');
+            addMessage(`System: ${data.message}`, 'system', data.timestamp);
             updateOnlineUsersDisplay(data.onlineUsers);
         });
 
         socket.on('new_message', (data) => {
             const isMyMessage = data.userId === currentUser.id;
             const prefix = isMyMessage ? 'You' : data.username;
-            addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user');
+            addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user', data.timestamp);
         });
 
-        socket.on('receive_message', (data) => {
-            const isMyMessage = data.userId === currentUser.id;
-            const prefix = isMyMessage ? 'You' : data.username;
-            addMessage(`${prefix}: ${data.text}`, isMyMessage ? 'my-message' : 'user');
-        });
-
-        socket.on('room_created', (data) => {
-            addMessage(`System: Joined room "${data.room}"`, 'system');
-            if (!availableRooms.includes(data.room)) {
-                availableRooms.push(data.room);
-                updateRoomsDisplay();
-            }
+        socket.on('room_joined', (data) => {
             currentRoom = data.room;
             currentRoomElement.textContent = data.room;
+
+            // Clear and add message history
+            messagesDiv.innerHTML = '';
+            data.messages.forEach(message => {
+                const isMyMessage = message.userId === currentUser.id;
+                const prefix = isMyMessage ? 'You' : message.username;
+                addMessage(`${prefix}: ${message.text}`, isMyMessage ? 'my-message' : 'user', message.timestamp);
+            });
+
+            addMessage(`System: Joined room "${data.room}"`, 'system', new Date().toISOString());
+            updateRoomsDisplay();
         });
 
         socket.on('user_joined_room', (data) => {
             if (data.room === currentRoom) {
-                addMessage(`System: ${data.message}`, 'system');
+                addMessage(`System: ${data.message}`, 'system', data.timestamp);
             }
         });
 
         socket.on('user_left_room', (data) => {
             if (data.room === currentRoom) {
-                addMessage(`System: ${data.message}`, 'system');
+                addMessage(`System: ${data.message}`, 'system', data.timestamp);
             }
         });
 
         socket.on('user_left', (data) => {
-            addMessage(`System: ${data.message}`, 'system');
+            addMessage(`System: ${data.message}`, 'system', data.timestamp);
             updateOnlineUsersDisplay(data.onlineUsers);
         });
 
-        socket.on('room_history', (data) => {
-            if (data.room === currentRoom) {
-                // Clear current messages
-                messagesDiv.innerHTML = '';
-
-                // Add message history
-                data.messages.forEach(message => {
-                    const isMyMessage = message.sender === currentUser.id;
-                    const prefix = isMyMessage ? 'You' : message.senderUsername;
-                    addMessage(`${prefix}: ${message.content}`, isMyMessage ? 'my-message' : 'user');
-                });
-            }
+        socket.on('rooms_updated', (roomsList) => {
+            console.log('Received rooms update:', roomsList);
+            availableRooms = roomsList;
+            updateRoomsDisplay();
         });
 
         socket.on('error', (data) => {
-            addMessage(`Error: ${data.message}`, 'system');
+            addMessage(`Error: ${data.message}`, 'system', new Date().toISOString());
             console.error('Socket error:', data);
         });
     }
 
     // ========== ROOM MANAGEMENT ==========
-
-    // Update rooms display
     function updateRoomsDisplay() {
         roomsListElement.innerHTML = '';
+
+        if (availableRooms.length === 0) {
+            roomsListElement.innerHTML = '<div style="padding: 10px; color: #666; text-align: center;">No rooms available</div>';
+            return;
+        }
 
         availableRooms.forEach(room => {
             const roomElement = document.createElement('div');
             roomElement.className = 'room-item';
-            if (room === currentRoom) {
+            if (room.name === currentRoom) {
                 roomElement.classList.add('active');
             }
-            roomElement.textContent = room;
+
+            roomElement.innerHTML = `
+                    <div style="font-weight: bold;">${room.name}</div>
+                    <div class="room-info">
+                        ${room.userCount || 0} users
+                        ${room.description ? `• ${room.description}` : ''}
+                    </div>
+                `;
 
             roomElement.addEventListener('click', () => {
-                joinRoom(room);
+                joinRoom(room.name);
             });
 
             roomsListElement.appendChild(roomElement);
         });
     }
 
-    // Join a room
     function joinRoom(roomName) {
         if (!socket || !socket.connected) {
             alert('Not connected to server');
             return;
         }
 
-        // Leave previous room if different
-        if (currentRoom && currentRoom !== roomName) {
-            socket.emit('leave_room', { name: currentRoom });
-        }
-
-        // Join new room
+        console.log('Joining room:', roomName);
         socket.emit('join_room', { name: roomName });
-        currentRoom = roomName;
-        currentRoomElement.textContent = roomName;
-
-        // Clear messages when switching rooms
-        messagesDiv.innerHTML = '';
-
-        updateRoomsDisplay();
     }
 
-    // Create new room
     function createNewRoom() {
         const roomName = newRoomNameInput.value.trim();
         const roomDescription = newRoomDescriptionInput.value.trim();
@@ -488,12 +426,12 @@
             joinRoom(roomName);
             newRoomNameInput.value = '';
             newRoomDescriptionInput.value = '';
+        } else {
+            alert('Please enter a room name');
         }
     }
 
     // ========== ONLINE USERS MANAGEMENT ==========
-
-    // Update online users display
     function updateOnlineUsersDisplay(users) {
         onlineUsersListElement.innerHTML = '';
 
@@ -510,8 +448,6 @@
     }
 
     // ========== CHAT FUNCTIONS ==========
-
-    // Send message
     function sendMessage() {
         if (!socket || !socket.connected) {
             alert('Not connected to server');
@@ -529,23 +465,23 @@
         }
     }
 
-    // Add message to chat
-    function addMessage(text, className) {
+    function addMessage(text, className, timestamp = null) {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${className}`;
-        messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+
+        const time = timestamp ? new Date(timestamp) : new Date();
+        const timeString = time.toLocaleTimeString();
+
+        messageElement.textContent = `[${timeString}] ${text}`;
         messagesDiv.appendChild(messageElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
-    // Clear messages
     function clearMessages() {
         messagesDiv.innerHTML = '';
     }
 
-    // ========== UI UPDATE FUNCTIONS ==========
-
-    // Update user interface
+    // ========== UI FUNCTIONS ==========
     function updateUserInterface() {
         if (currentUser) {
             currentUsernameElement.textContent = currentUser.username;
@@ -554,18 +490,19 @@
     }
 
     // ========== EVENT LISTENERS ==========
-
-    // Authentication buttons
     registerButton.addEventListener('click', register);
     loginButton.addEventListener('click', login);
     logoutButton.addEventListener('click', logout);
-
-    // Chat buttons
     sendButton.addEventListener('click', sendMessage);
     clearButton.addEventListener('click', clearMessages);
     createNewRoomButton.addEventListener('click', createNewRoom);
+    refreshRoomsButton.addEventListener('click', () => {
+        if (socket && socket.connected) {
+            socket.emit('get_rooms');
+            addMessage('System: Refreshing rooms list...', 'system', new Date().toISOString());
+        }
+    });
 
-    // Enter key handlers
     messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             sendMessage();
